@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { Bell, LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { toast } from "sonner";
+import { triggerAlert } from "@/lib/notifications";
 import {
   Avatar,
   AvatarFallback,
@@ -74,6 +76,28 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        {/* Notification Sound & Vibration Test Button */}
+        <button
+          type="button"
+          onClick={async () => {
+            if (typeof window !== "undefined" && "Notification" in window) {
+              if (Notification.permission === "default") {
+                await Notification.requestPermission().catch(() => {});
+              }
+            }
+            triggerAlert(
+              "🔔 تجربة التنبيه والصوت",
+              "إذا سمعت هذا الصوت واهتز هاتفك فالإشعارات تعمل بنجاح 100%!",
+            );
+            toast.success("تم تشغيل صوت التنبيه والاهتزاز التجريبي 🔔");
+          }}
+          title="اختبار التنبيه والصوت"
+          aria-label="اختبار التنبيه والصوت"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Bell className="h-4 w-4" />
+        </button>
+
         <ModeToggle />
 
         <DropdownMenu>
