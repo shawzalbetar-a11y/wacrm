@@ -134,6 +134,9 @@ export function AiConfig() {
       model === AI_PROVIDER_DEFAULT_MODEL.openai ||
       model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
       model === AI_PROVIDER_DEFAULT_MODEL.gemini ||
+      model.startsWith('gpt-') ||
+      model.startsWith('claude-') ||
+      model.startsWith('gemini-') ||
       model.trim() === '';
     if (isDefaultModel) setModel(AI_PROVIDER_DEFAULT_MODEL[next]);
   };

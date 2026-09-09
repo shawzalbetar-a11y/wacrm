@@ -84,7 +84,14 @@ export async function generateGemini(args: ProviderArgs): Promise<ProviderResult
 
   // Sanitize model name: ensure valid Gemini model
   let model = (args.model || 'gemini-1.5-flash').trim().replace(/^models\//, '')
-  if (model.startsWith('gpt-') || model.startsWith('claude-') || !model) {
+  if (
+    model.startsWith('gpt-') ||
+    model.startsWith('claude-') ||
+    model === 'gemini-pro' ||
+    model === 'gemini-1.0-pro' ||
+    model.startsWith('gemini-1.0') ||
+    !model
+  ) {
     model = 'gemini-1.5-flash'
   }
 
