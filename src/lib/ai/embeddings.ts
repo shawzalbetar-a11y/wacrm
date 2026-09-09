@@ -37,20 +37,22 @@ export function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(',')}]`
 }
 
-async function embedWithGemini(
+async function executeGeminiBatchEmbed(
+  model: string,
   apiKey: string,
   batch: string[],
   timeoutMs: number,
-): Promise<number[][]> {
+): Promise<Response> {
+  const modelName = model.replace(/^models\//, '')
   const requests = batch.map((text) => ({
-    model: 'models/text-embedding-004',
+    model: `models/${modelName}`,
     content: { parts: [{ text }] },
     outputDimensionality: EMBEDDING_DIMENSIONS,
   }))
 
-  let res: Response
-  try {
-    res = await fetch(GEMINI_EMBEDDINGS_URL, {
+  return await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:batchEmbedContents`,
+    {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,7 +60,25 @@ async function embedWithGemini(
       },
       body: JSON.stringify({ requests }),
       signal: AbortSignal.timeout(timeoutMs),
-    })
+    },
+  )
+}
+
+async function embedWithGemini(
+  apiKey: string,
+  batch: string[],
+  timeoutMs: number,
+): Promise<number[][]> {
+  let res: Response
+  try {
+    res = await executeGeminiBatchEmbed('text-embedding-004', apiKey, batch, timeoutMs)
+
+    if (res.status === 404) {
+      const retryRes = await executeGeminiBatchEmbed('embedding-001', apiKey, batch, timeoutMs)
+      if (retryRes.ok) {
+        res = retryRes
+      }
+    }
   } catch (err) {
     throw toNetworkError(err)
   }
@@ -147,7 +167,7 @@ async function embedWithOpenAi(
 /**
  * Embed a list of strings, preserving input order.
  * Automatically selects Google Gemini (text-embedding-004) or OpenAI (text-embedding-3-small)
- * based on the API key format (AIzaSy... vs sk-...).
+ * based on the API key format (any non-sk-* key is treated as Google Gemini).
  */
 export async function embedTexts(
   apiKey: string,
@@ -157,13 +177,33 @@ export async function embedTexts(
   const timeoutMs = aiRequestTimeoutMs()
   const out: number[][] = []
 
-  const isGemini = apiKey.startsWith('AIzaSy') || apiKey.length === 39
+  const isGemini = !apiKey.startsWith('sk-')
 
   for (let start = 0; start < inputs.length; start += BATCH_SIZE) {
     const batch = inputs.slice(start, start + BATCH_SIZE)
-    const batchResult = isGemini
-      ? await embedWithGemini(apiKey, batch, timeoutMs)
-      : await embedWithOpenAi(apiKey, batch, timeoutMs)
+    let batchResult: number[][]
+
+    if (isGemini) {
+      try {
+        batchResult = await embedWithGemini(apiKey, batch, timeoutMs)
+      } catch (err) {
+        if (apiKey.startsWith('sk-')) {
+          batchResult = await embedWithOpenAi(apiKey, batch, timeoutMs)
+        } else {
+          throw err
+        }
+      }
+    } else {
+      try {
+        batchResult = await embedWithOpenAi(apiKey, batch, timeoutMs)
+      } catch (err) {
+        try {
+          batchResult = await embedWithGemini(apiKey, batch, timeoutMs)
+        } catch {
+          throw err
+        }
+      }
+    }
 
     out.push(...batchResult)
   }

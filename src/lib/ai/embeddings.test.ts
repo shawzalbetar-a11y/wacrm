@@ -132,4 +132,24 @@ describe('embedTexts', () => {
       'AIzaSyGeminiEmbeddingKey'
     )
   })
+
+  it('embeds text using Google Gemini when key starts with AQ.', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        embeddings: [{ values: [0.7, 0.8, 0.9] }],
+      }),
+    } as unknown as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const out = await embedTexts('AQ.Ab8RNTestKey123', ['hello'])
+    expect(out).toEqual([[0.7, 0.8, 0.9]])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('generativelanguage.googleapis.com')
+    expect((opts as { headers: Record<string, string> }).headers['x-goog-api-key']).toBe(
+      'AQ.Ab8RNTestKey123'
+    )
+  })
 })
