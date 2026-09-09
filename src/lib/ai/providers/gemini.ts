@@ -108,13 +108,14 @@ async function discoverAvailableModel(apiKey: string, timeoutMs: number): Promis
     )
 
     // Prefer flash models, then pro models, then any eligible
-    const flash = eligible.find((m) => m.name.includes('flash'))
-    if (flash) return flash.name.replace(/^models\//, '')
+    const flash = eligible.find((m) => m.name?.includes('flash'))
+    if (flash?.name) return flash.name.replace(/^models\//, '')
 
-    const pro = eligible.find((m) => m.name.includes('pro'))
-    if (pro) return pro.name.replace(/^models\//, '')
+    const pro = eligible.find((m) => m.name?.includes('pro'))
+    if (pro?.name) return pro.name.replace(/^models\//, '')
 
-    if (eligible[0]) return eligible[0].name.replace(/^models\//, '')
+    const first = eligible[0]
+    if (first?.name) return first.name.replace(/^models\//, '')
   } catch {
     // Non-blocking fallback
   }

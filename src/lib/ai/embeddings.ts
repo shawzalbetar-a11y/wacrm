@@ -57,7 +57,8 @@ async function discoverEmbeddingModel(apiKey: string, timeoutMs: number): Promis
           m.supportedGenerationMethods.includes('batchEmbedContents')),
     )
 
-    if (eligible[0]) return eligible[0].name.replace(/^models\//, '')
+    const first = eligible[0]
+    if (first?.name) return first.name.replace(/^models\//, '')
   } catch {
     // Non-blocking fallback
   }
