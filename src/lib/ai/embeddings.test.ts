@@ -108,4 +108,28 @@ describe('embedTexts', () => {
     )
     await expect(embedTexts('sk-x', ['a', 'b'])).rejects.toBeInstanceOf(AiError)
   })
+
+  it('embeds text using Google Gemini text-embedding-004 when Gemini key is supplied', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        embeddings: [{ values: [0.1, 0.2, 0.3] }, { values: [0.4, 0.5, 0.6] }],
+      }),
+    } as unknown as Response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    const out = await embedTexts('AIzaSyGeminiEmbeddingKey', ['text 1', 'text 2'])
+    expect(out).toEqual([
+      [0.1, 0.2, 0.3],
+      [0.4, 0.5, 0.6],
+    ])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('generativelanguage.googleapis.com')
+    expect(url).toContain('text-embedding-004')
+    expect((opts as { headers: Record<string, string> }).headers['x-goog-api-key']).toBe(
+      'AIzaSyGeminiEmbeddingKey'
+    )
+  })
 })

@@ -389,14 +389,20 @@ export function AiConfig() {
                     setEmbeddingsKeyEdited(true);
                   }
                 }}
-                placeholder="sk-... (OpenAI)"
+                placeholder={
+                  provider === 'gemini'
+                    ? 'AIzaSy... (Gemini) or sk-... (OpenAI)'
+                    : 'sk-... (OpenAI)'
+                }
                 disabled={disabled}
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
-                {t('embeddingsHint', {
-                  sameKeyText: provider === 'openai' ? t('sameKeyText') : '',
-                })}
+                {provider === 'gemini'
+                  ? 'Optional: Supports Google Gemini (text-embedding-004) or OpenAI key for semantic search in Knowledge Base. Leave blank for keyword search.'
+                  : t('embeddingsHint', {
+                      sameKeyText: provider === 'openai' ? t('sameKeyText') : '',
+                    })}
               </p>
             </div>
           </CardContent>
