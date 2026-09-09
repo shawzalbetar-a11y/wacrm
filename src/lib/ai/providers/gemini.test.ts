@@ -131,4 +131,46 @@ describe('generateGemini adapter', () => {
 
     expect(result.text).toBe('Auto-discovered response')
   })
+
+  it('recovers from model deprecated error by using suggested model', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 400,
+              message:
+                'This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.6-flash for the latest features and improvements.',
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Response from 3.6-flash' }],
+                  role: 'model',
+                },
+              },
+            ],
+            usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 6, totalTokenCount: 18 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+
+    const result = await generateGemini({
+      apiKey: 'AIzaSyTestKey123',
+      model: 'gemini-2.5-flash',
+      systemPrompt: '',
+      messages: [{ role: 'user', content: 'hello' }],
+      timeoutMs: 5000,
+    })
+
+    expect(result.text).toBe('Response from 3.6-flash')
+  })
 })

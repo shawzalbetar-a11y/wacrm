@@ -142,22 +142,22 @@ async function executeGeminiRequest(
 /**
  * Call Google's official Gemini REST API (v1beta/models/...:generateContent).
  * Supports standard Google AI Studio keys (AIzaSy...).
- * Includes auto-discovery fallback if a specific model returns 404.
+ * Includes auto-discovery fallback if a specific model returns 404 or is deprecated.
  */
 export async function generateGemini(args: ProviderArgs): Promise<ProviderResult> {
   const { apiKey, systemPrompt, messages, timeoutMs } = args
 
-  // Sanitize model name
-  let model = (args.model || 'gemini-2.5-flash').trim().replace(/^models\//, '')
+  // Sanitize model name: default to 3.6-flash and map legacy generations
+  let model = (args.model || 'gemini-3.6-flash').trim().replace(/^models\//, '')
   if (
     model.startsWith('gpt-') ||
     model.startsWith('claude-') ||
+    model.startsWith('gemini-1.') ||
+    model.startsWith('gemini-2.') ||
     model === 'gemini-pro' ||
-    model === 'gemini-1.0-pro' ||
-    model.startsWith('gemini-1.0') ||
     !model
   ) {
-    model = 'gemini-2.5-flash'
+    model = 'gemini-3.6-flash'
   }
 
   const payload: Record<string, unknown> = {
@@ -178,20 +178,46 @@ export async function generateGemini(args: ProviderArgs): Promise<ProviderResult
   try {
     res = await executeGeminiRequest(model, apiKey, payload, timeoutMs)
 
-    // If model returned 404 (not supported / deprecated in v1beta), auto-discover active model on this key
-    if (res.status === 404) {
-      const discovered = await discoverAvailableModel(apiKey, timeoutMs)
-      if (discovered && discovered !== model) {
-        res = await executeGeminiRequest(discovered, apiKey, payload, timeoutMs)
-      } else {
+    // If request failed (e.g. 404, 400 deprecated, model not found)
+    if (!res.ok) {
+      const errorBody = (await res.clone().json().catch(() => null)) as GeminiResponse | null
+      const msg = errorBody?.error?.message || ''
+
+      // Check if Google suggested a specific model in the error message (e.g. "update your code to use models/gemini-3.6-flash")
+      const suggestedMatch =
+        msg.match(/use\s+(?:models\/)?(gemini-[\w.-]+)/i) ||
+        msg.match(/update\s+(?:your\s+code\s+to\s+use\s+)?(?:models\/)?(gemini-[\w.-]+)/i) ||
+        msg.match(/recommend\s+(?:you\s+to\s+use\s+)?(?:models\/)?(gemini-[\w.-]+)/i)
+      const suggestedModel = suggestedMatch ? suggestedMatch[1] : null
+
+      if (suggestedModel) {
+        const retryRes = await executeGeminiRequest(suggestedModel, apiKey, payload, timeoutMs)
+        if (retryRes.ok) {
+          res = retryRes
+        }
+      }
+
+      // If still not ok, try dynamic list discovery
+      if (!res.ok) {
+        const discovered = await discoverAvailableModel(apiKey, timeoutMs)
+        if (discovered && discovered !== suggestedModel) {
+          const retryRes = await executeGeminiRequest(discovered, apiKey, payload, timeoutMs)
+          if (retryRes.ok) {
+            res = retryRes
+          }
+        }
+      }
+
+      // If still not ok, try standard fallback candidates
+      if (!res.ok) {
         const fallbacks = [
-          'gemini-2.5-flash',
-          'gemini-2.0-flash',
-          'gemini-1.5-flash-latest',
-          'gemini-1.5-pro',
+          'gemini-3.6-flash',
+          'gemini-3.7-flash',
+          'gemini-3.8-flash',
+          'gemini-3.5-flash',
         ]
         for (const fb of fallbacks) {
-          if (fb === model) continue
+          if (fb === suggestedModel) continue
           const retryRes = await executeGeminiRequest(fb, apiKey, payload, timeoutMs)
           if (retryRes.ok) {
             res = retryRes
