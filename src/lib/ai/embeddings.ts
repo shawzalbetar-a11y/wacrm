@@ -37,6 +37,33 @@ export function toVectorLiteral(embedding: number[]): string {
   return `[${embedding.join(',')}]`
 }
 
+async function discoverEmbeddingModel(apiKey: string, timeoutMs: number): Promise<string | null> {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+      headers: { 'x-goog-api-key': apiKey },
+      signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)),
+    })
+    if (!res.ok) return null
+    const data = (await res.json().catch(() => null)) as {
+      models?: { name?: string; supportedGenerationMethods?: string[] }[]
+    } | null
+    if (!data?.models || !Array.isArray(data.models)) return null
+
+    const eligible = data.models.filter(
+      (m) =>
+        m.name &&
+        Array.isArray(m.supportedGenerationMethods) &&
+        (m.supportedGenerationMethods.includes('embedContent') ||
+          m.supportedGenerationMethods.includes('batchEmbedContents')),
+    )
+
+    if (eligible[0]) return eligible[0].name.replace(/^models\//, '')
+  } catch {
+    // Non-blocking fallback
+  }
+  return null
+}
+
 async function executeGeminiBatchEmbed(
   model: string,
   apiKey: string,
@@ -69,18 +96,34 @@ async function embedWithGemini(
   batch: string[],
   timeoutMs: number,
 ): Promise<number[][]> {
-  let res: Response
-  try {
-    res = await executeGeminiBatchEmbed('text-embedding-004', apiKey, batch, timeoutMs)
+  const primaryModel = 'gemini-embedding-001'
+  let res: Response = await executeGeminiBatchEmbed(primaryModel, apiKey, batch, timeoutMs)
 
-    if (res.status === 404) {
-      const retryRes = await executeGeminiBatchEmbed('embedding-001', apiKey, batch, timeoutMs)
+  if (!res.ok) {
+    const discovered = await discoverEmbeddingModel(apiKey, timeoutMs)
+    if (discovered && discovered !== primaryModel) {
+      const retryRes = await executeGeminiBatchEmbed(discovered, apiKey, batch, timeoutMs)
       if (retryRes.ok) {
         res = retryRes
       }
     }
-  } catch (err) {
-    throw toNetworkError(err)
+
+    if (!res.ok) {
+      const fallbacks = [
+        'gemini-embedding-001',
+        'text-embedding-004',
+        'embedding-001',
+        'text-embedding-005',
+      ]
+      for (const fb of fallbacks) {
+        if (fb === primaryModel || fb === discovered) continue
+        const retryRes = await executeGeminiBatchEmbed(fb, apiKey, batch, timeoutMs)
+        if (retryRes.ok) {
+          res = retryRes
+          break
+        }
+      }
+    }
   }
 
   if (!res.ok) {
