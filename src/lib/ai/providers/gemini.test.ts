@@ -77,4 +77,58 @@ describe('generateGemini adapter', () => {
       })
     ).rejects.toThrow(AiError)
   })
+
+  it('recovers from 404 by discovering active model', async () => {
+    // First call returns 404 (model not found)
+    // Second call to listModels returns available models
+    // Third call with discovered model succeeds
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            error: { code: 404, message: 'models/gemini-1.5-flash is not found' },
+          }),
+          { status: 404, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            models: [
+              {
+                name: 'models/gemini-2.5-flash',
+                supportedGenerationMethods: ['generateContent'],
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            candidates: [
+              {
+                content: {
+                  parts: [{ text: 'Auto-discovered response' }],
+                  role: 'model',
+                },
+              },
+            ],
+            usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5, totalTokenCount: 15 },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+
+    const result = await generateGemini({
+      apiKey: 'AIzaSyTestKey123',
+      model: 'gemini-1.5-flash',
+      systemPrompt: '',
+      messages: [{ role: 'user', content: 'hello' }],
+      timeoutMs: 5000,
+    })
+
+    expect(result.text).toBe('Auto-discovered response')
+  })
 })

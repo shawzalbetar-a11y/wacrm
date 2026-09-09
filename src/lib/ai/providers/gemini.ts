@@ -40,6 +40,15 @@ interface GeminiResponse {
   }
 }
 
+interface GeminiModelInfo {
+  name: string
+  supportedGenerationMethods?: string[]
+}
+
+interface GeminiListModelsResponse {
+  models?: GeminiModelInfo[]
+}
+
 /**
  * Clean & map messages for Gemini format:
  * - Assistant role is 'model'
@@ -76,14 +85,70 @@ function normalizeForGemini(messages: ChatMessage[]): GeminiContent[] {
 }
 
 /**
+ * Query Gemini's ListModels to dynamically discover active models for the user's API key
+ */
+async function discoverAvailableModel(apiKey: string, timeoutMs: number): Promise<string | null> {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+      headers: {
+        'x-goog-api-key': apiKey,
+      },
+      signal: AbortSignal.timeout(Math.min(timeoutMs, 5000)),
+    })
+    if (!res.ok) return null
+    const data = (await res.json().catch(() => null)) as GeminiListModelsResponse | null
+    if (!data?.models || !Array.isArray(data.models)) return null
+
+    const eligible = data.models.filter(
+      (m) =>
+        m.name &&
+        Array.isArray(m.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes('generateContent') &&
+        !m.name.includes('embedding'),
+    )
+
+    // Prefer flash models, then pro models, then any eligible
+    const flash = eligible.find((m) => m.name.includes('flash'))
+    if (flash) return flash.name.replace(/^models\//, '')
+
+    const pro = eligible.find((m) => m.name.includes('pro'))
+    if (pro) return pro.name.replace(/^models\//, '')
+
+    if (eligible[0]) return eligible[0].name.replace(/^models\//, '')
+  } catch {
+    // Non-blocking fallback
+  }
+  return null
+}
+
+async function executeGeminiRequest(
+  model: string,
+  apiKey: string,
+  payload: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<Response> {
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+  return await fetch(geminiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+}
+
+/**
  * Call Google's official Gemini REST API (v1beta/models/...:generateContent).
  * Supports standard Google AI Studio keys (AIzaSy...).
+ * Includes auto-discovery fallback if a specific model returns 404.
  */
 export async function generateGemini(args: ProviderArgs): Promise<ProviderResult> {
   const { apiKey, systemPrompt, messages, timeoutMs } = args
 
-  // Sanitize model name: ensure valid Gemini model
-  let model = (args.model || 'gemini-1.5-flash').trim().replace(/^models\//, '')
+  // Sanitize model name
+  let model = (args.model || 'gemini-2.5-flash').trim().replace(/^models\//, '')
   if (
     model.startsWith('gpt-') ||
     model.startsWith('claude-') ||
@@ -92,10 +157,8 @@ export async function generateGemini(args: ProviderArgs): Promise<ProviderResult
     model.startsWith('gemini-1.0') ||
     !model
   ) {
-    model = 'gemini-1.5-flash'
+    model = 'gemini-2.5-flash'
   }
-
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
 
   const payload: Record<string, unknown> = {
     contents: normalizeForGemini(messages),
@@ -113,15 +176,30 @@ export async function generateGemini(args: ProviderArgs): Promise<ProviderResult
 
   let res: Response
   try {
-    res = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
+    res = await executeGeminiRequest(model, apiKey, payload, timeoutMs)
+
+    // If model returned 404 (not supported / deprecated in v1beta), auto-discover active model on this key
+    if (res.status === 404) {
+      const discovered = await discoverAvailableModel(apiKey, timeoutMs)
+      if (discovered && discovered !== model) {
+        res = await executeGeminiRequest(discovered, apiKey, payload, timeoutMs)
+      } else {
+        const fallbacks = [
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash-latest',
+          'gemini-1.5-pro',
+        ]
+        for (const fb of fallbacks) {
+          if (fb === model) continue
+          const retryRes = await executeGeminiRequest(fb, apiKey, payload, timeoutMs)
+          if (retryRes.ok) {
+            res = retryRes
+            break
+          }
+        }
+      }
+    }
   } catch (err) {
     throw toNetworkError(err)
   }
