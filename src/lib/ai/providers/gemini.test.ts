@@ -7,21 +7,26 @@ describe('generateGemini adapter', () => {
     vi.restoreAllMocks()
   })
 
-  it('calls Gemini endpoint and returns text and usage', async () => {
+  it('calls native Gemini generateContent endpoint and returns text and usage', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          choices: [
+          candidates: [
             {
-              message: {
-                content: 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
+              content: {
+                parts: [
+                  {
+                    text: 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
+                  },
+                ],
+                role: 'model',
               },
             },
           ],
-          usage: {
-            prompt_tokens: 15,
-            completion_tokens: 8,
-            total_tokens: 23,
+          usageMetadata: {
+            promptTokenCount: 15,
+            candidatesTokenCount: 8,
+            totalTokenCount: 23,
           },
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -49,7 +54,14 @@ describe('generateGemini adapter', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          choices: [{ message: { content: '   ' } }],
+          candidates: [
+            {
+              content: {
+                parts: [{ text: '   ' }],
+                role: 'model',
+              },
+            },
+          ],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
