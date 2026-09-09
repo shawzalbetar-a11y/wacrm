@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff, Save } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
@@ -249,10 +249,24 @@ export function AiConfig() {
 
   return (
     <div>
-      <SettingsPanelHead
-        title={t('title')}
-        description={t('description')}
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
+        <SettingsPanelHead
+          title={t('title')}
+          description={t('description')}
+        />
+        <Button
+          onClick={handleSave}
+          disabled={disabled}
+          className="shrink-0 self-start sm:self-auto gap-2 shadow-sm font-medium"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          {t('save')}
+        </Button>
+      </div>
 
       {!canEdit && (
         <p className="mb-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
@@ -503,18 +517,18 @@ export function AiConfig() {
           }
         />
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between pt-2">
           {configured ? (
             <Button
               variant="ghost"
               onClick={handleRemove}
               disabled={!canEdit || removing}
-              className="text-destructive hover:text-destructive"
+              className="text-destructive hover:text-destructive gap-2"
             >
               {removing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
               )}
               {t('remove')}
             </Button>
@@ -522,8 +536,17 @@ export function AiConfig() {
             <span />
           )}
 
-          <Button onClick={handleSave} disabled={disabled}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button
+            onClick={handleSave}
+            disabled={disabled}
+            size="lg"
+            className="gap-2 px-6 shadow-sm font-medium"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
             {t('save')}
           </Button>
         </div>
