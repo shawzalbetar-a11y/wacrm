@@ -26,7 +26,7 @@ export function PwaNotificationManager() {
     // 2. Native Capacitor Push & Local Notifications initialization
     if (Capacitor.isNativePlatform()) {
       try {
-        // Initialize LocalNotifications channel
+        // Initialize LocalNotifications channel with sound & vibration
         LocalNotifications.createChannel({
           id: "wacrm_messages",
           name: "رسائل واتساب الواردة",
@@ -55,8 +55,7 @@ export function PwaNotificationManager() {
           });
 
         PushNotifications.addListener("registration", (token) => {
-          console.log("[fcm] Device token:", token.value);
-          PushNotifications.subscribeTo({ topic: "wacrm_alerts" }).catch(() => {});
+          console.log("[fcm] Device registered token:", token.value);
           fetch("/api/notifications/fcm-token", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -123,7 +122,7 @@ export function PwaNotificationManager() {
       triggerAlert(title, bodyText, conversationId);
     };
 
-    // 4. Supabase Realtime Listener (with auth state handler)
+    // 4. Supabase Realtime Listener
     const supabase = createClient();
     const channelName = `pwa-all-alerts-${Date.now()}`;
     const channel = supabase.channel(channelName);
