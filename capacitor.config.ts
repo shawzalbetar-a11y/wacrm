@@ -3,10 +3,11 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.wacrm.app',
   appName: 'WA CRM',
-  webDir: 'public',
+  webDir: 'capacitor-dist',
   server: {
-    androidScheme: 'https',
+    url: 'https://wacrm.netlify.app',
     cleartext: true,
+    androidScheme: 'https',
     allowNavigation: ['*'],
   },
   plugins: {
