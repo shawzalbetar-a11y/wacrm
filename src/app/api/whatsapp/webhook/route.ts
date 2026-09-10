@@ -869,7 +869,7 @@ async function processMessage(
   }
 
   // Send native Android FCM Push Notification to device(s)
-  void sendFcmNotification({
+  await sendFcmNotification({
     title: contactRecord.name ? `رسالة من ${contactRecord.name} 💬` : 'رسالة واتساب جديدة 💬',
     body: inboundText || (contentType === 'image' ? '📷 أرسل صورة' : contentType === 'audio' ? '🎙️ أرسل تسجيلاً صوتياً' : '💬 رسالة جديدة'),
     conversationId: conversation.id,
