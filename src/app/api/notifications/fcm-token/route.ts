@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendFcmNotification } from '@/lib/notifications/fcm'
 
 let _adminClient: any = null
 function supabaseAdmin() {
@@ -12,13 +13,6 @@ function supabaseAdmin() {
   return _adminClient
 }
 
-// Global active device token registry
-const registeredDeviceTokens = new Set<string>()
-
-export function getRegisteredFcmTokens(): string[] {
-  return Array.from(registeredDeviceTokens)
-}
-
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null)
@@ -27,23 +21,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Token is required' }, { status: 400 })
     }
 
-    registeredDeviceTokens.add(token.trim())
+    const cleanToken = token.trim()
 
     try {
-      // Best-effort database persistence if table exists
       await supabaseAdmin()
         .from('fcm_device_tokens')
         .upsert(
           {
-            token: token.trim(),
+            token: cleanToken,
             device_type: 'android',
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'token' }
         )
-    } catch {
-      // Table may not exist yet, memory set will handle delivery
+    } catch (dbErr) {
+      console.warn('[fcm] Failed to save token to database:', dbErr)
     }
+
+    // Send a welcome test push notification to verify the device connection
+    void sendFcmNotification({
+      token: cleanToken,
+      title: 'WA CRM 💬',
+      body: 'تم تفعيل واستقبال إشعارات الهاتف بنجاح! 🔔',
+    }).catch(() => {})
 
     return NextResponse.json({ success: true, registered: true })
   } catch (error) {
