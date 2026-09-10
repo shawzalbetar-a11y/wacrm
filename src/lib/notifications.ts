@@ -1,6 +1,9 @@
 /**
- * Core Notification, Sound & Vibration dispatcher
+ * Core Notification, Sound & Vibration dispatcher with Native Capacitor + Web fallback
  */
+
+import { Capacitor } from "@capacitor/core";
+import { Haptics, NotificationType } from "@capacitor/haptics";
 
 export function playChimeSound() {
   // 1. Web Audio API Synthesis
@@ -58,11 +61,17 @@ export async function triggerAlert(
   body: string,
   conversationId?: string
 ) {
-  // Sound
+  // 1. Sound
   playChimeSound();
 
-  // Vibration
-  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+  // 2. Native Haptics or Web Vibration
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Haptics.notification({ type: NotificationType.Success });
+    } catch {
+      // Ignore
+    }
+  } else if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try {
       navigator.vibrate([400, 200, 400]);
     } catch {
@@ -70,7 +79,7 @@ export async function triggerAlert(
     }
   }
 
-  // OS Notification
+  // 3. OS Notification
   if (
     typeof window !== "undefined" &&
     "Notification" in window &&
@@ -81,7 +90,7 @@ export async function triggerAlert(
       icon: "/icons/icon-192x192.png",
       badge: "/icons/icon-192x192.png",
       vibrate: [400, 200, 400],
-      tag: `msg-${Date.now()}-${Math.random()}`, // Unique tag ensures every message sounds and vibrates
+      tag: `msg-${Date.now()}-${Math.random()}`,
       renotify: true,
       data: {
         conversationId,

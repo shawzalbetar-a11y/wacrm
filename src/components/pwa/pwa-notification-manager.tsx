@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { playChimeSound, triggerAlert } from "@/lib/notifications";
 
@@ -20,22 +22,52 @@ export function PwaNotificationManager() {
     window.addEventListener("click", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
 
-    // 2. Register Service Worker
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then((reg) => {
-          reg.update().catch(() => {});
-        })
-        .catch((err) => {
-          console.warn("[pwa] SW registration failed:", err);
+    // 2. Native Capacitor Push & Permissions initialization
+    if (Capacitor.isNativePlatform()) {
+      try {
+        PushNotifications.checkPermissions().then((status) => {
+          if (status.receive === "prompt") {
+            PushNotifications.requestPermissions().then((res) => {
+              if (res.receive === "granted") {
+                PushNotifications.register().catch(() => {});
+              }
+            });
+          } else if (status.receive === "granted") {
+            PushNotifications.register().catch(() => {});
+          }
         });
-    }
 
-    // 3. Request Notification permissions
-    if (typeof window !== "undefined" && "Notification" in window) {
-      if (Notification.permission === "default") {
-        Notification.requestPermission().catch(() => {});
+        PushNotifications.addListener("pushNotificationReceived", (notification) => {
+          triggerAlert(
+            notification.title || "رسالة واتساب جديدة 💬",
+            notification.body || "",
+            notification.data?.conversationId
+          );
+        });
+
+        PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+          router.push("/inbox");
+        });
+      } catch {
+        // Ignore native push setup failures gracefully
+      }
+    } else {
+      // 3. Web Service Worker & Browser Notifications
+      if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((reg) => {
+            reg.update().catch(() => {});
+          })
+          .catch((err) => {
+            console.warn("[pwa] SW registration failed:", err);
+          });
+      }
+
+      if (typeof window !== "undefined" && "Notification" in window) {
+        if (Notification.permission === "default") {
+          Notification.requestPermission().catch(() => {});
+        }
       }
     }
 

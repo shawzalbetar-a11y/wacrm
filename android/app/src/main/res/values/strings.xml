@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WA CRM</string>
+    <string name="title_activity_main">WA CRM</string>
+    <string name="package_name">com.wacrm.app</string>
+    <string name="custom_url_scheme">com.wacrm.app</string>
+</resources>

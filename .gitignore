@@ -45,3 +45,9 @@ next-env.d.ts
 
 # supabase
 supabase/.temp/
+
+# Android build outputs
+*.apk
+*.aab
+android/local.properties
+
