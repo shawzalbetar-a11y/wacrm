@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1019706146311",
+    "project_id": "kanditasarl",
+    "storage_bucket": "kanditasarl.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1019706146311:android:9c96e812efce1e25e0b4a2",
+        "android_client_info": {
+          "package_name": "com.wacrm.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1019706146311-91rce1a8prrbudtas7qq4gui3u0c0cap.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCv5lGqUDIxm_1oMjotnJ4NYDdXf44dQrk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1019706146311-91rce1a8prrbudtas7qq4gui3u0c0cap.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

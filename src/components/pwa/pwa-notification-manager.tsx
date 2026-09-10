@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { playChimeSound, triggerAlert } from "@/lib/notifications";
@@ -22,36 +23,60 @@ export function PwaNotificationManager() {
     window.addEventListener("click", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
 
-    // 2. Native Capacitor Notifications setup
+    // 2. Native Capacitor Push & Local Notifications initialization
     if (Capacitor.isNativePlatform()) {
       try {
-        LocalNotifications.checkPermissions()
+        // Initialize LocalNotifications channel
+        LocalNotifications.createChannel({
+          id: "wacrm_messages",
+          name: "رسائل واتساب الواردة",
+          description: "إشعارات الرسائل الجديدة مع الصوت والاهتزاز",
+          importance: 5,
+          visibility: 1,
+          sound: "notification.wav",
+          vibration: true,
+        }).catch(() => {});
+
+        // Request FCM Push permissions
+        PushNotifications.checkPermissions()
           .then((status) => {
-            if (status.display === "prompt" || status.display === "prompt-with-rationale") {
-              return LocalNotifications.requestPermissions();
+            if (status.receive === "prompt") {
+              return PushNotifications.requestPermissions();
             }
             return status;
           })
-          .then(() => {
-            // Create notification channel on Android if supported
-            LocalNotifications.createChannel({
-              id: "wacrm_messages",
-              name: "رسائل واتساب الواردة",
-              description: "إشعارات الرسائل الجديدة مع الصوت والاهتزاز",
-              importance: 5,
-              visibility: 1,
-              vibration: true,
-            }).catch(() => {});
+          .then((res) => {
+            if (res.receive === "granted") {
+              PushNotifications.register();
+            }
           })
           .catch((err) => {
-            console.warn("[native] Notification permission check error:", err);
+            console.warn("[fcm] Push permission error:", err);
           });
 
-        LocalNotifications.addListener("localNotificationActionPerformed", (action) => {
+        PushNotifications.addListener("registration", (token) => {
+          console.log("[fcm] Device token:", token.value);
+          PushNotifications.subscribeTo({ topic: "wacrm_alerts" }).catch(() => {});
+          fetch("/api/notifications/fcm-token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: token.value }),
+          }).catch(() => {});
+        });
+
+        PushNotifications.addListener("pushNotificationReceived", (notification) => {
+          triggerAlert(
+            notification.title || "رسالة واتساب جديدة 💬",
+            notification.body || "",
+            notification.data?.conversationId
+          );
+        });
+
+        PushNotifications.addListener("pushNotificationActionPerformed", () => {
           router.push("/inbox");
         });
       } catch (err) {
-        console.warn("[native] LocalNotifications init error:", err);
+        console.warn("[native] Push setup error:", err);
       }
     } else {
       // 3. Web Service Worker & Browser Notifications
@@ -98,7 +123,7 @@ export function PwaNotificationManager() {
       triggerAlert(title, bodyText, conversationId);
     };
 
-    // 4. Supabase Realtime Listener
+    // 4. Supabase Realtime Listener (with auth state handler)
     const supabase = createClient();
     const channelName = `pwa-all-alerts-${Date.now()}`;
     const channel = supabase.channel(channelName);
@@ -138,7 +163,7 @@ export function PwaNotificationManager() {
           fireNotification(preview, msg.conversation_id);
         }
       )
-      // Listen to conversations updates (when unread_count changes or message text changes)
+      // Listen to conversations updates
       .on(
         "postgres_changes",
         {

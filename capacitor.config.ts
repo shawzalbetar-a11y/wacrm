@@ -11,6 +11,9 @@ const config: CapacitorConfig = {
     allowNavigation: ['*'],
   },
   plugins: {
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
     LocalNotifications: {
       smallIcon: 'ic_launcher',
       iconColor: '#22c55e',

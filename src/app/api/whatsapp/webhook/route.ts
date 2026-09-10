@@ -15,6 +15,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { sendFcmNotification } from '@/lib/notifications/fcm'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -866,6 +867,13 @@ async function processMessage(
       configOwnerUserId,
     })
   }
+
+  // Send native Android FCM Push Notification to device(s)
+  void sendFcmNotification({
+    title: contactRecord.name ? `رسالة من ${contactRecord.name} 💬` : 'رسالة واتساب جديدة 💬',
+    body: inboundText || (contentType === 'image' ? '📷 أرسل صورة' : contentType === 'audio' ? '🎙️ أرسل تسجيلاً صوتياً' : '💬 رسالة جديدة'),
+    conversationId: conversation.id,
+  }).catch((err) => console.error('[webhook] FCM send error:', err))
 
   // message.received webhook (public API). Awaited — not fire-and-forget
   // — because we're inside the route's `after()` block, which only keeps

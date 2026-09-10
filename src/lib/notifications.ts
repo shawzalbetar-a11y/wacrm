@@ -82,6 +82,7 @@ export async function triggerAlert(
             body,
             id: Math.floor(Math.random() * 1000000),
             channelId: "wacrm_messages",
+            sound: "notification.wav",
             extra: {
               conversationId,
               url: "/inbox",
