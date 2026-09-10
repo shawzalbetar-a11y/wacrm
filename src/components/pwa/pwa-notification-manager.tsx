@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Capacitor } from "@capacitor/core";
-import { PushNotifications } from "@capacitor/push-notifications";
+import { LocalNotifications } from "@capacitor/local-notifications";
 import { createClient } from "@/lib/supabase/client";
 import { playChimeSound, triggerAlert } from "@/lib/notifications";
 
@@ -22,34 +22,36 @@ export function PwaNotificationManager() {
     window.addEventListener("click", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
 
-    // 2. Native Capacitor Push & Permissions initialization
+    // 2. Native Capacitor Notifications setup
     if (Capacitor.isNativePlatform()) {
       try {
-        PushNotifications.checkPermissions().then((status) => {
-          if (status.receive === "prompt") {
-            PushNotifications.requestPermissions().then((res) => {
-              if (res.receive === "granted") {
-                PushNotifications.register().catch(() => {});
-              }
-            });
-          } else if (status.receive === "granted") {
-            PushNotifications.register().catch(() => {});
-          }
-        });
+        LocalNotifications.checkPermissions()
+          .then((status) => {
+            if (status.display === "prompt" || status.display === "prompt-with-rationale") {
+              return LocalNotifications.requestPermissions();
+            }
+            return status;
+          })
+          .then(() => {
+            // Create notification channel on Android if supported
+            LocalNotifications.createChannel({
+              id: "wacrm_messages",
+              name: "رسائل واتساب الواردة",
+              description: "إشعارات الرسائل الجديدة مع الصوت والاهتزاز",
+              importance: 5,
+              visibility: 1,
+              vibration: true,
+            }).catch(() => {});
+          })
+          .catch((err) => {
+            console.warn("[native] Notification permission check error:", err);
+          });
 
-        PushNotifications.addListener("pushNotificationReceived", (notification) => {
-          triggerAlert(
-            notification.title || "رسالة واتساب جديدة 💬",
-            notification.body || "",
-            notification.data?.conversationId
-          );
-        });
-
-        PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+        LocalNotifications.addListener("localNotificationActionPerformed", (action) => {
           router.push("/inbox");
         });
-      } catch {
-        // Ignore native push setup failures gracefully
+      } catch (err) {
+        console.warn("[native] LocalNotifications init error:", err);
       }
     } else {
       // 3. Web Service Worker & Browser Notifications

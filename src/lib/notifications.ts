@@ -4,6 +4,7 @@
 
 import { Capacitor } from "@capacitor/core";
 import { Haptics, NotificationType } from "@capacitor/haptics";
+import { LocalNotifications } from "@capacitor/local-notifications";
 
 export function playChimeSound() {
   // 1. Web Audio API Synthesis
@@ -71,6 +72,27 @@ export async function triggerAlert(
     } catch {
       // Ignore
     }
+
+    // 3. Native Android Local Notification
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title,
+            body,
+            id: Math.floor(Math.random() * 1000000),
+            channelId: "wacrm_messages",
+            extra: {
+              conversationId,
+              url: "/inbox",
+            },
+          },
+        ],
+      });
+      return;
+    } catch {
+      // Ignore
+    }
   } else if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try {
       navigator.vibrate([400, 200, 400]);
@@ -79,7 +101,7 @@ export async function triggerAlert(
     }
   }
 
-  // 3. OS Notification
+  // 4. Web OS / Browser Notification
   if (
     typeof window !== "undefined" &&
     "Notification" in window &&
